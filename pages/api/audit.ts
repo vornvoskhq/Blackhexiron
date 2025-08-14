@@ -58,18 +58,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       const fileBuffer = await fsReadFileAsync(file.filepath);
       const storagePath = `${id}.sol`;
 
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage (no contentType or cacheControl)
       const { data: storageResult, error: uploadError } = await supabase
         .storage
         .from("contracts")
         .upload(storagePath, fileBuffer, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: "text/plain"
+          upsert: false
         });
 
       if (uploadError) {
-        return res.status(500).json({ error: "Failed to upload file" });
+        // Log the upload error details for diagnosis
+        // eslint-disable-next-line no-console
+        console.error("Supabase upload error:", uploadError);
+        return res.status(500).json({ error: "Failed to upload file", details: uploadError.message });
       }
 
       // Get public URL
