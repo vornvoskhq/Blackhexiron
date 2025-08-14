@@ -16,7 +16,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-type Data = { jobId: string; status: string } | { error: string };
+type Data =
+  | { jobId: string; status: string }
+  | { ok: boolean }
+  | { error: string };
 
 async function parseForm(req: NextApiRequest): Promise<{ file?: File; fields?: formidable.Fields }> {
   const form = formidable({ multiples: false });
@@ -34,6 +37,11 @@ async function fsReadFileAsync(path: string): Promise<Buffer> {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
+  if (req.method === "GET") {
+    // Sanity check endpoint
+    return res.status(200).json({ ok: true });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
