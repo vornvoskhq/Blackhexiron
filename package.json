@@ -17,7 +17,8 @@
     "postcss": "^8.4.24",
     "autoprefixer": "^10.4.16",
     "shadcn-ui": "^0.9.5",
-    "@supabase/auth-helpers-nextjs": "^0.8.0"
+    "@supabase/auth-helpers-nextjs": "^0.8.0",
+    "formidable": "^2.0.2"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
