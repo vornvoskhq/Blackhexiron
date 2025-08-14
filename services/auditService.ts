@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { spawn } from "child_process";
+import * as os from "os";
+import * as path from "path";
+import * as fs from "fs/promises";
+import fetch from "node-fetch";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -23,8 +28,131 @@ export async function createContractRecord(data: ContractRecord): Promise<boolea
   return true;
 }
 
-export function enqueueAuditJob(id: string) {
-  // Placeholder for actual queueing/processing logic (e.g., trigger Slither)
-  // eslint-disable-next-line no-console
-  console.log(`[AUDIT QUEUE] Enqueued job for contract ID: ${id}`);
+/**
+ * Asynchronously process a contract audit job by running Slither, uploading a JSON report,
+ * and recording results in the `audit_results` table.
+ */
+export async function enqueueAuditJob(id: string) {
+  try {
+    // 1. Fetch contract record
+    const { data: contract, error: fetchErr } = await supabase
+      .from("contracts")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !contract) {
+      console.error("[AUDIT] Could not fetch contract record", fetchErr);
+      return;
+    }
+
+    if (!contract.file_url) {
+      console.error("[AUDIT] No file_url found for contract:", id);
+      return;
+    }
+
+    // 2. Download the .sol file
+    const filename = `${id}.sol`;
+    const tmpDir = os.tmpdir();
+    const localPath = path.join(tmpDir, filename);
+    const fileRes = await fetch(contract.file_url);
+    if (!fileRes.ok) {
+      throw new Error(`[AUDIT] Failed to download .sol file: ${fileRes.statusText}`);
+    }
+    const fileBuf = await fileRes.buffer();
+    await fs.writeFile(localPath, fileBuf);
+
+    // 3. Run Slither CLI on the local file
+    const slitherCmd = "slither";
+    const slitherArgs = [
+      localPath,
+      "--json",
+      "slither-report.json",
+      "--config-json",
+      '{"solc":{"version":"0.8.0"}}'
+    ];
+
+    // Run Slither as a child process and capture output
+    const slitherPromise = new Promise<{json: any, reportPath: string}>((resolve, reject) => {
+      const proc = spawn(slitherCmd, slitherArgs, { cwd: tmpDir });
+      let stdout = "";
+      let stderr = "";
+      proc.stdout.on("data", (data) => { stdout += data.toString(); });
+      proc.stderr.on("data", (data) => { stderr += data.toString(); });
+      proc.on("close", async (code) => {
+        if (code !== 0) {
+          reject(new Error(`Slither failed: exit ${code}\n${stderr}`));
+        } else {
+          // Read output JSON file
+          const reportPath = path.join(tmpDir, "slither-report.json");
+          try {
+            const jsonStr = await fs.readFile(reportPath, "utf8");
+            const json = JSON.parse(jsonStr);
+            resolve({ json, reportPath });
+          } catch (err) {
+            reject(new Error("Failed to read/parse Slither output: " + err));
+          }
+        }
+      });
+    });
+
+    const { json: slitherReport, reportPath } = await slitherPromise;
+
+    // 4. Parse severity counts
+    const severityCounts: Record<string, number> = {};
+    if (slitherReport?.results?.detectors) {
+      for (const finding of slitherReport.results.detectors) {
+        const sev = finding?.impact || "Unknown";
+        severityCounts[sev] = (severityCounts[sev] || 0) + 1;
+      }
+    }
+
+    // 5. Upload JSON report to Supabase Storage
+    const reportFileBuf = await fs.readFile(reportPath);
+    const reportStoragePath = `reports/${id}.json`;
+    const { error: reportUploadErr } = await supabase
+      .storage
+      .from("contracts")
+      .upload(reportStoragePath, reportFileBuf, { upsert: true });
+    if (reportUploadErr) {
+      throw new Error("Failed to upload JSON report: " + reportUploadErr.message);
+    }
+    const { data: reportUrlData } = supabase
+      .storage
+      .from("contracts")
+      .getPublicUrl(reportStoragePath);
+    const report_url = reportUrlData?.publicUrl;
+
+    // 6. Insert into audit_results table and update contracts.status
+    const { error: auditResultErr } = await supabase
+      .from("audit_results")
+      .insert([
+        {
+          id,
+          severity_counts: severityCounts,
+          report_url,
+          completed_at: new Date().toISOString()
+        }
+      ]);
+    if (auditResultErr) {
+      throw new Error("Failed to insert audit_results: " + auditResultErr.message);
+    }
+    const { error: statusUpdateErr } = await supabase
+      .from("contracts")
+      .update({ status: "completed" })
+      .eq("id", id);
+    if (statusUpdateErr) {
+      throw new Error("Failed to update contract status: " + statusUpdateErr.message);
+    }
+
+    // Cleanup temp files
+    await fs.unlink(localPath).catch(() => {});
+    await fs.unlink(reportPath).catch(() => {});
+
+    // eslint-disable-next-line no-console
+    console.log(`[AUDIT] Completed Slither analysis for contract: ${id}`);
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.error(`[AUDIT PIPELINE ERROR] ${err?.message || err}`);
+  }
 }
