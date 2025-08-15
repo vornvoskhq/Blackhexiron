@@ -51,16 +51,33 @@ export async function enqueueAuditJob(id: string) {
       return;
     }
 
+    // Update pipeline_status: downloading
+    await supabase
+      .from("contracts")
+      .update({ pipeline_status: "downloading" })
+      .eq("id", id);
+
     // 2. Download the .sol file
     const filename = `${id}.sol`;
     const tmpDir = os.tmpdir();
     const localPath = path.join(tmpDir, filename);
     const fileRes = await fetch(contract.file_url);
     if (!fileRes.ok) {
+      await supabase
+        .from("contracts")
+        .update({ pipeline_status: "download_error", status: "error" })
+        .eq("id", id);
       throw new Error(`[AUDIT] Failed to download .sol file: ${fileRes.statusText}`);
     }
-    const fileBuf = await fileRes.buffer();
+    // Fix: use Buffer.from(await fileRes.arrayBuffer())
+    const fileBuf = Buffer.from(await fileRes.arrayBuffer());
     await fs.writeFile(localPath, fileBuf);
+
+    // Update pipeline_status: analyzing
+    await supabase
+      .from("contracts")
+      .update({ pipeline_status: "analyzing" })
+      .eq("id", id);
 
     // 3. Run Slither CLI on the local file
     const slitherCmd = "slither";
@@ -81,6 +98,10 @@ export async function enqueueAuditJob(id: string) {
       proc.stderr.on("data", (data) => { stderr += data.toString(); });
       proc.on("close", async (code) => {
         if (code !== 0) {
+          await supabase
+            .from("contracts")
+            .update({ pipeline_status: "analysis_error", status: "error" })
+            .eq("id", id);
           reject(new Error(`Slither failed: exit ${code}\n${stderr}`));
         } else {
           // Read output JSON file
@@ -90,6 +111,10 @@ export async function enqueueAuditJob(id: string) {
             const json = JSON.parse(jsonStr);
             resolve({ json, reportPath });
           } catch (err) {
+            await supabase
+              .from("contracts")
+              .update({ pipeline_status: "parse_error", status: "error" })
+              .eq("id", id);
             reject(new Error("Failed to read/parse Slither output: " + err));
           }
         }
@@ -97,6 +122,12 @@ export async function enqueueAuditJob(id: string) {
     });
 
     const { json: slitherReport, reportPath } = await slitherPromise;
+
+    // Update pipeline_status: uploading_report
+    await supabase
+      .from("contracts")
+      .update({ pipeline_status: "uploading_report" })
+      .eq("id", id);
 
     // 4. Parse severity counts
     const severityCounts: Record<string, number> = {};
@@ -115,6 +146,10 @@ export async function enqueueAuditJob(id: string) {
       .from("contracts")
       .upload(reportStoragePath, reportFileBuf, { upsert: true });
     if (reportUploadErr) {
+      await supabase
+        .from("contracts")
+        .update({ pipeline_status: "upload_error", status: "error" })
+        .eq("id", id);
       throw new Error("Failed to upload JSON report: " + reportUploadErr.message);
     }
     const { data: reportUrlData } = supabase
@@ -122,6 +157,12 @@ export async function enqueueAuditJob(id: string) {
       .from("contracts")
       .getPublicUrl(reportStoragePath);
     const report_url = reportUrlData?.publicUrl;
+
+    // Update pipeline_status: finalizing
+    await supabase
+      .from("contracts")
+      .update({ pipeline_status: "finalizing" })
+      .eq("id", id);
 
     // 6. Insert into audit_results table and update contracts.status
     const { error: auditResultErr } = await supabase
@@ -135,11 +176,15 @@ export async function enqueueAuditJob(id: string) {
         }
       ]);
     if (auditResultErr) {
+      await supabase
+        .from("contracts")
+        .update({ pipeline_status: "db_insert_error", status: "error" })
+        .eq("id", id);
       throw new Error("Failed to insert audit_results: " + auditResultErr.message);
     }
     const { error: statusUpdateErr } = await supabase
       .from("contracts")
-      .update({ status: "completed" })
+      .update({ status: "completed", pipeline_status: "completed" })
       .eq("id", id);
     if (statusUpdateErr) {
       throw new Error("Failed to update contract status: " + statusUpdateErr.message);

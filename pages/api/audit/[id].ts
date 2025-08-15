@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (contract.status === "pending") {
-    return res.status(200).json({ status: "pending" });
+    return res.status(200).json({ status: "pending", pipelineStatus: contract.pipeline_status });
   }
 
   if (contract.status === "completed") {

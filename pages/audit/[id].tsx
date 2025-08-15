@@ -20,7 +20,7 @@ function Spinner({ elapsed }: { elapsed: number }) {
 }
 
 type AuditStatus =
-  | { status: "pending" }
+  | { status: "pending"; pipelineStatus?: string }
   | { status: "completed"; severityCounts: Record<string, number>; reportUrl: string }
   | { error: string };
 
@@ -30,6 +30,7 @@ export default function AuditResultPage() {
   const [audit, setAudit] = useState<AuditStatus | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  const [pipelineStatus, setPipelineStatus] = useState<string | null>(null);
 
   // Fetch audit status/results
   async function fetchAuditStatus() {
@@ -38,6 +39,9 @@ export default function AuditResultPage() {
     const data = await res.json();
     if (data && data.error) {
       setPendingError(data.error);
+    }
+    if (data && data.pipelineStatus) {
+      setPipelineStatus(data.pipelineStatus);
     }
     setAudit(data);
   }
@@ -106,6 +110,9 @@ export default function AuditResultPage() {
     return (
       <main className="min-h-screen bg-antarctica-dark flex flex-col items-center justify-center">
         <Card>
+          {pipelineStatus && (
+            <div className="mb-2 text-antarctica-glitch font-mono uppercase tracking-widest">{pipelineStatus.replace(/_/g, " ")}</div>
+          )}
           <Spinner elapsed={elapsed} />
           {pendingError && (
             <div className="mt-4 text-red-400 font-mono">{pendingError}</div>
