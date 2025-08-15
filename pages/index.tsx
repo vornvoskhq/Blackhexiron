@@ -3,9 +3,55 @@ import { NavigationMenu } from "../components/NavigationMenu";
 import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import { useRef } from "react";
+import { useRouter } from "next/router";
+import { useState } from "react";
 
 export default function Home() {
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    const form = e.currentTarget;
+    const fileInput = form.querySelector<HTMLInputElement>("#contract-upload");
+    const addressInput = form.querySelector<HTMLInputElement>('input[type="text"]');
+    const file = fileInput?.files?.[0];
+    const contractAddress = addressInput?.value.trim();
+
+    let response, data;
+    if (file) {
+      const formData = new FormData();
+      formData.append("contract", file);
+      response = await fetch("/api/audit", {
+        method: "POST",
+        body: formData,
+      });
+    } else if (contractAddress) {
+      response = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractAddress }),
+      });
+    } else {
+      setLoading(false);
+      alert("Please upload a .sol file or enter a contract address.");
+      return;
+    }
+    try {
+      data = await response.json();
+      if (response.ok && data.jobId) {
+        router.push(`/audit/${data.jobId}`);
+      } else {
+        setLoading(false);
+        alert(data.error || "Failed to start audit.");
+      }
+    } catch (err) {
+      setLoading(false);
+      alert("Unexpected error submitting audit.");
+    }
+  }
 
   return (
     <>
@@ -29,7 +75,7 @@ export default function Home() {
             </Button>
             <Card className="max-w-xl w-full mx-auto mb-10">
               <h2 className="text-xl font-mono mb-4 text-antarctica-ice">Scan Your Smart Contract</h2>
-              <form ref={formRef} className="flex flex-col gap-4" onSubmit={e => e.preventDefault()}>
+              <form ref={formRef} className="flex flex-col gap-4" onSubmit={handleSubmit}>
                 <label className="text-sm font-mono text-antarctica-steel text-left" htmlFor="contract-upload">
                   Upload .sol file or paste contract address
                 </label>
@@ -44,8 +90,8 @@ export default function Home() {
                   placeholder="Or paste contract address (0x…)"
                   className="w-full bg-antarctica-dark text-antarctica-ice border border-antarctica-steel p-2 rounded font-mono"
                 />
-                <Button variant="default" type="submit">
-                  Submit
+                <Button variant="default" type="submit" disabled={loading}>
+                  {loading ? "Submitting..." : "Submit"}
                 </Button>
               </form>
             </Card>
