@@ -3,11 +3,18 @@ import { useEffect, useState } from "react";
 import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 
-function Spinner() {
+function formatElapsed(secs: number) {
+  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+  const ss = String(secs % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+function Spinner({ elapsed }: { elapsed: number }) {
   return (
     <div className="flex flex-col items-center justify-center">
       <div className="w-10 h-10 border-4 border-antarctica-glitch border-t-transparent rounded-full animate-spin mb-4"></div>
-      <span className="text-antarctica-steel font-mono">Audit running...</span>
+      <span className="text-antarctica-steel font-mono mb-1">Running audit...</span>
+      <span className="text-xs text-antarctica-steel font-mono">{formatElapsed(elapsed)}</span>
     </div>
   );
 }
@@ -21,25 +28,51 @@ export default function AuditResultPage() {
   const router = useRouter();
   const { id } = router.query;
   const [audit, setAudit] = useState<AuditStatus | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [pendingError, setPendingError] = useState<string | null>(null);
 
   // Fetch audit status/results
   async function fetchAuditStatus() {
     if (!id || typeof id !== "string") return;
     const res = await fetch(`/api/audit/${id}`);
     const data = await res.json();
+    if (data && data.error) {
+      setPendingError(data.error);
+    }
     setAudit(data);
   }
 
+  // Timer effect
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (audit && audit.status === "pending" && !pendingError) {
+      timer = setInterval(() => setElapsed(secs => secs + 1), 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [audit, pendingError]);
+
+  // Polling effect
   useEffect(() => {
     if (!id) return;
     let interval: NodeJS.Timeout;
+    let stopped = false;
     async function poll() {
       await fetchAuditStatus();
     }
     poll();
-    // Poll every 5s if pending
     interval = setInterval(() => {
       setAudit((current) => {
+        // If error found, stop polling
+        if (
+          (current && "error" in current) ||
+          (current && current.status === "completed")
+        ) {
+          stopped = true;
+          clearInterval(interval);
+          return current;
+        }
         if (current && current.status === "pending") {
           fetchAuditStatus();
         }
@@ -53,7 +86,7 @@ export default function AuditResultPage() {
   if (!audit) {
     return (
       <main className="min-h-screen bg-antarctica-dark flex flex-col items-center justify-center">
-        <Spinner />
+        <Spinner elapsed={elapsed} />
       </main>
     );
   }
@@ -62,7 +95,7 @@ export default function AuditResultPage() {
     return (
       <main className="min-h-screen bg-antarctica-dark flex flex-col items-center justify-center">
         <Card>
-          <div className="text-antarctica-glitch font-mono mb-2">Error</div>
+          <div className="text-antarctica-glitch font-mono mb-2">Audit error:</div>
           <div className="text-antarctica-steel">{audit.error}</div>
         </Card>
       </main>
@@ -73,7 +106,10 @@ export default function AuditResultPage() {
     return (
       <main className="min-h-screen bg-antarctica-dark flex flex-col items-center justify-center">
         <Card>
-          <Spinner />
+          <Spinner elapsed={elapsed} />
+          {pendingError && (
+            <div className="mt-4 text-red-400 font-mono">{pendingError}</div>
+          )}
         </Card>
       </main>
     );
