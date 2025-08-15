@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  height: 100%;
+  background: #0B1C2C;
+  color: #E3F6FF;
+  font-family: 'Inter', 'IBM Plex Mono', monospace, sans-serif;
+}

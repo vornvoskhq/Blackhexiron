@@ -1,0 +1,29 @@
+{
+  "name": "blackhexiron",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@supabase/supabase-js": "^2.43.5",
+    "tailwindcss": "^3.4.3",
+    "postcss": "^8.4.24",
+    "autoprefixer": "^10.4.16",
+    "shadcn-ui": "^0.9.5",
+    "@supabase/auth-helpers-nextjs": "^0.8.0",
+    "formidable": "^2.0.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/react": "^18.3.2",
+    "@types/node": "^20.11.30"
+  }
+}
