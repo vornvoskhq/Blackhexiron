@@ -82,9 +82,12 @@ export async function enqueueAuditJob(id: string) {
     // 3. Run Slither CLI on the local file
     const slitherCmd = "slither";
     const slitherArgs = [
+      "--overwrite-json",
       localPath,
       "--json",
-      "slither-report.json"
+      "slither-report.json",
+      "--config-json",
+      JSON.stringify({ solc: { version: "0.8.19" } })
     ];
 
     // Run Slither as a child process and capture output
