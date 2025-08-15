@@ -180,6 +180,11 @@ BLACKHEXIRON is the arcane audit engine for the post-human financial stack—our
 - **Code Review:** Pull request mandatory reviews, branch protection.  
 - **CI/CD:** GitHub Actions → build → tests → security scan → deploy to staging.  
 
+### Robust Report Naming & Slither Integration  
+- Each audit job generates a unique report file (e.g. `<job_id>-report.json`) to prevent file collisions in shared environments and support parallel analysis.
+- The pipeline avoids obsolete Slither CLI flags (`--overwrite-json`, `--config-json`) for compatibility with Slither ≥0.11.3 and future versions.
+- Future-proof: Detect Slither version at runtime and adapt arguments as needed (e.g., warn if version <0.11.3 or missing features).
+
 ## 4.2 Phased Implementation Plan  
 
 | Phase | Objectives                                 | Deliverables                         | Timeline (Weeks) | Testing                        | Go-Live Criteria                         |

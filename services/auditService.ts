@@ -80,14 +80,12 @@ export async function enqueueAuditJob(id: string) {
       .eq("id", id);
 
     // 3. Run Slither CLI on the local file
+    const reportFilename = `${id}-report.json`;
     const slitherCmd = "slither";
     const slitherArgs = [
-      "--overwrite-json",
       localPath,
       "--json",
-      "slither-report.json",
-      "--config-json",
-      JSON.stringify({ solc: { version: "0.8.19" } })
+      reportFilename
     ];
 
     // Run Slither as a child process and capture output
@@ -106,7 +104,7 @@ export async function enqueueAuditJob(id: string) {
           reject(new Error(`Slither failed: exit ${code}\n${stderr}`));
         } else {
           // Read output JSON file
-          const reportPath = path.join(tmpDir, "slither-report.json");
+          const reportPath = path.join(tmpDir, reportFilename);
           try {
             const jsonStr = await fs.readFile(reportPath, "utf8");
             const json = JSON.parse(jsonStr);
