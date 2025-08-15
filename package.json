@@ -19,7 +19,8 @@
     "shadcn-ui": "^0.9.5",
     "@supabase/auth-helpers-nextjs": "^0.8.0",
     "formidable": "^2.0.2",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "snarkjs": "^0.7.1"
   },
   "devDependencies": {
     "typescript": "^5.4.5",

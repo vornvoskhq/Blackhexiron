@@ -125,6 +125,34 @@ export default function AuditResultPage() {
   // Completed
   const severityEntries = Object.entries(audit.severityCounts || {});
 
+  // ZKP Compliance Proof State
+  const [zkpLoading, setZkpLoading] = useState(false);
+  const [zkpProof, setZkpProof] = useState<any | null>(null);
+  const [zkpError, setZkpError] = useState<string | null>(null);
+
+  async function handleGenerateProof() {
+    setZkpLoading(true);
+    setZkpProof(null);
+    setZkpError(null);
+    try {
+      const response = await fetch("/api/zkp/prove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: id, threshold: 1 }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setZkpError(data.error || "Failed to generate proof");
+      } else {
+        setZkpProof(data.proof);
+      }
+    } catch (err: any) {
+      setZkpError("Unexpected error generating proof");
+    } finally {
+      setZkpLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-antarctica-dark flex flex-col items-center justify-center p-4">
       <Card className="max-w-lg w-full">
@@ -162,6 +190,27 @@ export default function AuditResultPage() {
         >
           <Button variant="glitch">Download Full JSON Report</Button>
         </a>
+
+        <div className="mt-8">
+          <Button variant="default" onClick={handleGenerateProof} disabled={zkpLoading}>
+            {zkpLoading ? "Generating Compliance Proof..." : "Generate Compliance Proof"}
+          </Button>
+          {zkpLoading && (
+            <div className="flex items-center justify-center mt-2">
+              <div className="w-6 h-6 border-4 border-antarctica-glitch border-t-transparent rounded-full animate-spin"></div>
+              <span className="ml-2 text-xs text-antarctica-steel font-mono">Proving...</span>
+            </div>
+          )}
+          {zkpError && (
+            <div className="mt-2 text-red-400 font-mono">{zkpError}</div>
+          )}
+          {zkpProof && (
+            <div className="mt-4">
+              <div className="font-mono text-antarctica-frost mb-1">Proof:</div>
+              <pre className="bg-antarctica-slate text-xs p-2 rounded">{JSON.stringify(zkpProof, null, 2)}</pre>
+            </div>
+          )}
+        </div>
       </Card>
     </main>
   );
