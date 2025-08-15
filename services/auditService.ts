@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
-import fetch from "node-fetch";
+
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
